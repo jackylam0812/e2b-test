@@ -136,22 +136,26 @@ def test_host_disk_io() -> Dict:
             else:
                 logger.error(f"✗ 失败")
 
-        # 随机写 IOPS
-        logger.info("  随机写 IOPS 测试（QD=1, 10秒）...")
-        result = subprocess.run([
-            "fio", "--name=randwrite", "--ioengine=libaio", "--iodepth=1",
-            "--rw=randwrite", "--bs=4k", "--direct=1", "--size=500M",
-            "--numjobs=1", "--runtime=10", "--time_based",
-            "--group_reporting", "--output-format=json", f"--filename={test_file}"
-        ], capture_output=True, text=True, timeout=30)
+        # 随机写 IOPS (不同队列深度)
+        results["random_write_iops_by_qd"] = {}
+        for qd in [1, 4, 16, 32]:
+            logger.info(f"  随机写 IOPS 测试 (QD={qd}, 10秒)...")
+            result = subprocess.run([
+                "fio", "--name=randwrite", "--ioengine=libaio", f"--iodepth={qd}",
+                "--rw=randwrite", "--bs=4k", "--direct=1", "--size=500M",
+                "--numjobs=1", "--runtime=10", "--time_based",
+                "--group_reporting", "--output-format=json", f"--filename={test_file}"
+            ], capture_output=True, text=True, timeout=30)
 
-        if result.returncode == 0:
-            data = json.loads(result.stdout)
-            iops = data["jobs"][0]["write"]["iops"]
-            results["random_write_iops"] = iops
-            logger.info(f"✓ {iops:.2f} IOPS")
-        else:
-            logger.error(f"✗ 失败")
+            if result.returncode == 0:
+                data = json.loads(result.stdout)
+                iops = data["jobs"][0]["write"]["iops"]
+                results["random_write_iops_by_qd"][f"qd_{qd}"] = iops
+                if qd == 1:
+                    results["random_write_iops"] = iops  # 默认记录 QD=1
+                logger.info(f"✓ {iops:.2f} IOPS")
+            else:
+                logger.error(f"✗ 失败")
 
         # 顺序读吞吐量
         logger.info("  顺序读吞吐量测试（10秒）...")
