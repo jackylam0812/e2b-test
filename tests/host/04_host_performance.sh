@@ -239,7 +239,7 @@ test_storage_performance() {
     log_info "========================================="
     
     local output_file="$OUTPUT_DIR/host_storage_performance.json"
-    local test_file="/tmp/fio_host_test_file"
+    local test_file="/data/fio_host_test_file"
     
     # 随机读IOPS测试(QD=1)
     log_info "运行随机读IOPS测试(QD=1)..."
