@@ -113,7 +113,7 @@ def test_host_disk_io() -> Dict:
             logger.info("     安装: apt-get install fio")
             return {"skipped": "fio not installed"}
 
-        test_file = "/tmp/fio_test"
+        test_file = "/data/fio_test"
 
         # 随机读 IOPS (不同队列深度)
         results["random_read_iops_by_qd"] = {}
