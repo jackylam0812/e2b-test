@@ -24,36 +24,60 @@ echo ""
 TEST_SIZE="50M"
 SEQ_TEST_SIZE="100M"
 
+# 检测目录是否支持 O_DIRECT 的函数
+test_odirect_support() {
+    local dir=$1
+    fio --name=test_direct --ioengine=libaio --iodepth=1 --rw=read \
+        --bs=4k --direct=1 --size=1M --numjobs=1 --runtime=1 \
+        --group_reporting --output-format=json --directory=$dir > /tmp/fio_test_direct_$$.json 2>&1
+    
+    if grep -q "does not support O_DIRECT\|does not support direct" /tmp/fio_test_direct_$$.json 2>/dev/null || \
+       grep -q '"error" : 22' /tmp/fio_test_direct_$$.json 2>/dev/null; then
+        rm -f /tmp/fio_test_direct_$$.json $dir/test_direct.*.0 2>/dev/null
+        return 1
+    else
+        rm -f /tmp/fio_test_direct_$$.json $dir/test_direct.*.0 2>/dev/null
+        return 0
+    fi
+}
+
 # 选择测试目录：优先使用支持 O_DIRECT 的目录
-# /tmp 可能是 tmpfs，不支持 O_DIRECT
-if [ -d "/home" ] && touch /home/.fio_test 2>/dev/null; then
-    TEST_DIR="/home"
-    rm -f /home/.fio_test
-elif [ -d "/var/tmp" ] && touch /var/tmp/.fio_test 2>/dev/null; then
-    TEST_DIR="/var/tmp"
-    rm -f /var/tmp/.fio_test
-else
-    TEST_DIR="/tmp"
-fi
+echo "检测 O_DIRECT 支持..."
+TEST_DIR=""
+DIRECT_FLAG="0"
 
-# 检测是否支持 O_DIRECT
-DIRECT_FLAG="1"
-echo "测试 O_DIRECT 支持..."
-cd $TEST_DIR
-fio --name=test_direct --ioengine=libaio --iodepth=1 --rw=read \
-    --bs=4k --direct=1 --size=1M --numjobs=1 --runtime=1 \
-    --group_reporting --output-format=json > /tmp/fio_test_direct.json 2>&1
+# 候选目录列表（/tmp 可能是 tmpfs，不支持 O_DIRECT，放在最后）
+CANDIDATE_DIRS="/home /var/tmp /tmp"
 
-if grep -q "does not support O_DIRECT\|does not support direct" /tmp/fio_test_direct.json 2>/dev/null || \
-   grep -q '"error" : 22' /tmp/fio_test_direct.json 2>/dev/null; then
-    echo "⚠ 文件系统不支持 O_DIRECT，将使用 buffered I/O 模式"
+for dir in $CANDIDATE_DIRS; do
+    if [ -d "$dir" ] && touch $dir/.fio_test 2>/dev/null; then
+        rm -f $dir/.fio_test
+        echo "  检测 $dir..."
+        if test_odirect_support "$dir"; then
+            TEST_DIR="$dir"
+            DIRECT_FLAG="1"
+            echo "✓ $dir 支持 O_DIRECT"
+            break
+        else
+            echo "  $dir 不支持 O_DIRECT"
+        fi
+    fi
+done
+
+# 如果没有目录支持 O_DIRECT，则使用第一个可用目录
+if [ -z "$TEST_DIR" ]; then
+    for dir in $CANDIDATE_DIRS; do
+        if [ -d "$dir" ] && touch $dir/.fio_test 2>/dev/null; then
+            rm -f $dir/.fio_test
+            TEST_DIR="$dir"
+            break
+        fi
+    done
+    echo "⚠ 所有目录都不支持 O_DIRECT，将使用 buffered I/O 模式"
     echo "  注意：buffered I/O 结果会受到缓存影响，不代表真实磁盘性能"
-    DIRECT_FLAG="0"
-else
-    echo "✓ 文件系统支持 O_DIRECT"
 fi
-cleanup_fio_files
-echo "测试目录: $TEST_DIR"
+
+echo "测试目录: $TEST_DIR (direct=$DIRECT_FLAG)"
 echo ""
 
 # 随机读 IOPS 测试
