@@ -1,0 +1,198 @@
+# syntax=docker/dockerfile:1
+
+ARG BASEIMAGE=ubuntu
+ARG BASETAG=22.04
+ARG RUNTIME_USER=ubuntu
+
+# 缓存阶段：一次性安装所有 apt 包
+FROM --platform=linux/amd64 ${BASEIMAGE}:${BASETAG}
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    DISPLAY=:0 \
+    LANG=en_US.UTF-8 \
+    LANGUAGE=en_US.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    TZ=UTC \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_CACHE_DIR=/tmp/uv-cache
+
+
+RUN rm -f /etc/apt/apt.conf.d/docker-clean ; \
+    echo 'Binary::apt::APT::Keep-Downloaded-Packages "true" ;' > /etc/apt/apt.conf.d/keep-cache
+
+# 唯一的 apt-get update：添加所有源并安装所有软件包
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    wget \
+    git \
+    gnupg \
+    gnupg2 \
+    apt-transport-https \
+    && \
+    # 添加 Chromium PPA 源
+    echo "deb http://ppa.launchpad.net/savoury1/chromium/ubuntu jammy main" > /etc/apt/sources.list.d/savoury1-chromium.list && \
+    curl -fsSL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xE996735927E427A733BB653E374C7797FB006459" | gpg --dearmor -o /etc/apt/trusted.gpg.d/savoury1-chromium.gpg && \
+    # 添加 GitHub CLI 源
+    install -d -m 0755 /etc/apt/keyrings && \
+    curl -fsSL -o /etc/apt/keyrings/githubcli-archive-keyring.gpg https://cli.github.com/packages/githubcli-archive-keyring.gpg && \
+    chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg && \
+    install -d -m 0755 /etc/apt/sources.list.d && \
+    printf 'deb [arch=%s signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main\n' "$(dpkg --print-architecture)" > /etc/apt/sources.list.d/github-cli.list && \
+    # 更新源列表并安装所有软件包
+    apt-get update && apt-get install -y --no-install-recommends \
+    sudo \
+    net-tools \
+    less \
+    psmisc \
+    poppler-utils \
+    unzip \
+    zip \
+    tar \
+    supervisor \
+    gzip \
+    vim \
+    nano \
+    tini \
+    libgtk2.0-0 \
+    libgtk-3-0 \
+    libgbm-dev \
+    libnotify-dev \
+    libnss3 libxss1 libasound2 libxtst6 xauth \
+    python3.11 \
+    python3.11-venv \
+    python3-pip \
+    openbox \
+    xvfb \
+    x11vnc \
+    xterm \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libatk1.0-0 \
+    libatspi2.0-0 \
+    libcups2 \
+    libdbus-1-3 \
+    libdrm2 \
+    libgbm1 \
+    libnspr4 \
+    libnss3 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxkbcommon0 \
+    libxrandr2 \
+    libxshmfence1 \
+    xdg-utils \
+    mesa-utils \
+    mesa-vulkan-drivers \
+    vulkan-tools \
+    dbus \
+    dbus-x11 \
+    x11-xserver-utils \
+    fonts-liberation \
+    fonts-noto-cjk \
+    fonts-noto-cjk-extra \
+    fonts-ipafont-gothic \
+    fonts-wqy-zenhei \
+    fonts-wqy-microhei \
+    fonts-droid-fallback \
+    fonts-noto \
+    fonts-noto-extra \
+    fonts-noto-color-emoji \
+    fonts-sil-abyssinica \
+    fonts-sil-padauk \
+    fonts-lohit-deva \
+    fonts-lohit-gujr \
+    fonts-lohit-taml \
+    fonts-hosny-amiri \
+    fonts-sil-scheherazade \
+    fonts-thai-tlwg \
+    socat \
+    bc \
+    make \
+    file \
+    xdotool \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
+    libpangoft2-1.0-0 \
+    libgdk-pixbuf2.0-0 \
+    libharfbuzz0b \
+    default-jre \
+    graphviz \
+    libreoffice \
+    libffi-dev \
+    libjpeg-dev \
+    libopenjp2-7-dev \
+    ffmpeg \
+    lsof \
+    patch \
+    tree \
+    mysql-client \
+    chromium-browser \
+    gh \
+    jq \
+    gstreamer1.0-plugins-base \
+    gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad \
+    gstreamer1.0-plugins-ugly \
+    gstreamer1.0-libav \
+    gstreamer1.0-tools \
+    pulseaudio \
+    pulseaudio-utils \
+    libxcvt0 \
+    # 添加额外的X11相关库以确保兼容性
+    libxcb-xinerama0 \
+    libxcb-shape0 \
+    libxcb-randr0 \
+    libx11-xcb1 \
+    libxcursor1 \
+    xclip \
+    xserver-xorg-core \
+    xserver-xorg-video-dummy \
+    xserver-xorg-input-evdev \
+    xserver-xorg-input-libinput \
+    xinit \
+    xauth \
+    xutils-dev \
+    libx11-dev xorg-dev libxi-dev libxrandr-dev libxfixes-dev libxtst-dev \
+    && apt-mark hold chromium-browser
+
+# 安装 uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+
+# 安装D2图表渲染工具
+RUN curl -fsSL https://d2lang.com/install.sh | sh -s --
+
+# 下载 plantuml jar
+RUN if [ ! -f /usr/local/bin/plantuml-1.2025.4.jar ]; then \
+    wget -O /usr/local/bin/plantuml-1.2025.4.jar https://github.com/plantuml/plantuml/releases/download/v1.2025.4/plantuml-1.2025.4.jar; \
+    chown root:root /usr/local/bin/plantuml-1.2025.4.jar; \
+    chmod 755 /usr/local/bin/plantuml-1.2025.4.jar; \
+    fi;
+
+# Install code-server
+RUN curl -fsSL https://code-server.dev/install.sh | sh && \
+    which code-server && \
+    test -f $(which code-server)
+
+# Note: apt rclone is too old (doesn't support bisync), install from official script
+RUN curl https://rclone.org/install.sh | bash
+
+# create python to python3 link
+RUN ln -s /usr/bin/python3.11 /usr/bin/python && \
+    ln -sf /usr/bin/python3.11 /usr/bin/python3
+
+# python 预装依赖
+RUN UV_SYSTEM_PYTHON=true uv pip install --only-binary=pycairo requests matplotlib \
+    reportlab xhtml2pdf fpdf fpdf2 weasyprint pandas numpy playwright \
+    beautifulsoup4 fastapi flask markdown openpyxl pdf2image pillow plotly seaborn tabulate tqdm uvicorn \
+    git-remote-s3 openai
+
+# Create ubuntu user and setup sudo
+RUN \
+    useradd -m -s /bin/bash ubuntu && \
+    echo "ubuntu ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/ubuntu && \
+    chmod 0440 /etc/sudoers.d/ubuntu && \
+    mkdir -p ${HOME} ${MANUS_OPT_PATH} ${HOME}/.cache/uv && \
+    touch ${HOME}/.bashrc ${HOME}/.user_env && \
+    chown ubuntu:ubuntu ${HOME} ${HOME}/.bashrc ${HOME}/.user_env ${MANUS_OPT_PATH} ${HOME}/.cache ${HOME}/.cache/uv

@@ -1,0 +1,35 @@
+# E2B 性能测试框架依赖
+# 版本固定以确保环境一致性
+
+# ========== 核心依赖 (必需) ==========
+# E2B SDK - 固定 1.1.0 版本(兼容 envd 0.2.0)
+e2b==1.1.0
+
+# YAML 解析
+pyyaml==6.0.2
+
+# 彩色日志输出
+colorlog==6.10.1
+
+# ========== 可选依赖 (云存储测试) ==========
+# AWS S3
+boto3==1.35.0
+botocore==1.35.0
+
+# Google Cloud Storage
+google-cloud-storage==2.18.2
+
+# Azure Blob Storage
+azure-storage-blob==12.23.1
+azure-identity==1.19.0
+
+# ========== 说明 ==========
+# 1. 核心测试只需要: e2b, pyyaml, colorlog
+# 2. 云存储测试需要对应云的 SDK
+# 3. 宿主机测试需要系统工具: sysbench, fio
+#
+# 安装:
+#   pip3 install -r requirements.txt
+#
+# 最小安装(只核心功能):
+#   pip3 install e2b==1.1.0 pyyaml==6.0.2 colorlog==6.10.1
